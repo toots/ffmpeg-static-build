@@ -1,0 +1,53 @@
+name: Build fdk-aac
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/fdk-aac
+          key: ${{ inputs.arch }}-dep-fdk-aac-${{ hashFiles('.github/workflows/dep-fdk-aac.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake libtool
+
+      - name: Build fdk-aac
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          FDK_AAC_TAG: v2.0.3
+        run: |
+          git clone --depth 1 --branch $FDK_AAC_TAG \
+            https://github.com/mstorsjo/fdk-aac.git
+          cd fdk-aac
+          autoreconf -fi
+          ./configure \
+            --prefix=$GITHUB_WORKSPACE/deps/fdk-aac \
+            --enable-static \
+            --disable-shared \
+            --disable-dependency-tracking \
+            CXXFLAGS="-fPIC"
+          make -j$(nproc)
+          make install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/fdk-aac
+          key: ${{ inputs.arch }}-dep-fdk-aac-${{ hashFiles('.github/workflows/dep-fdk-aac.yml') }}

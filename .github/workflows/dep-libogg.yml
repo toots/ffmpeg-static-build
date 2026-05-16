@@ -1,0 +1,52 @@
+name: Build libogg
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libogg
+          key: ${{ inputs.arch }}-dep-libogg-${{ hashFiles('.github/workflows/dep-libogg.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake libtool
+
+      - name: Build libogg
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          OGG_TAG: v1.3.5
+        run: |
+          git clone --depth 1 --branch $OGG_TAG \
+            https://github.com/xiph/ogg.git
+          cd ogg
+          ./autogen.sh
+          ./configure \
+            --prefix=$GITHUB_WORKSPACE/deps/libogg \
+            --enable-static \
+            --disable-shared \
+            CFLAGS="-fPIC"
+          make -j$(nproc)
+          make install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/libogg
+          key: ${{ inputs.arch }}-dep-libogg-${{ hashFiles('.github/workflows/dep-libogg.yml') }}

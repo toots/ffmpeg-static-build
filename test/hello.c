@@ -85,6 +85,8 @@ int main(void)
     require_decoder(AV_CODEC_ID_MP2,       "mp2");
     require_decoder(AV_CODEC_ID_MP3,       "mp3");
     require_decoder(AV_CODEC_ID_VORBIS,    "vorbis");
+    require_decoder(AV_CODEC_ID_OPUS,      "opus");
+    require_decoder_by_name("libopus");
     require_decoder(AV_CODEC_ID_PCM_S16LE, "pcm_s16le");
     require_decoder(AV_CODEC_ID_PCM_S24LE, "pcm_s24le");
     require_decoder(AV_CODEC_ID_PCM_S32LE, "pcm_s32le");
@@ -96,6 +98,7 @@ int main(void)
     require_encoder(AV_CODEC_ID_FLAC,      "flac");
     require_encoder(AV_CODEC_ID_MP2,       "mp2");
     require_encoder_by_name("libvorbis");
+    require_encoder_by_name("libopus");
     require_encoder(AV_CODEC_ID_PCM_S16LE, "pcm_s16le");
     require_encoder(AV_CODEC_ID_PCM_S24LE, "pcm_s24le");
     require_encoder(AV_CODEC_ID_PCM_S32LE, "pcm_s32le");

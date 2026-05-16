@@ -1,0 +1,64 @@
+name: Build x265
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/x265
+          key: ${{ inputs.arch }}-dep-x265-${{ hashFiles('.github/workflows/dep-x265.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake curl nasm
+
+      - name: Build x265
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          X265_VERSION: "4.1"
+        run: |
+          curl -L "https://bitbucket.org/multicoreware/x265_git/downloads/x265_${X265_VERSION}.tar.gz" \
+            -o x265.tar.gz
+          tar xzf x265.tar.gz
+
+          ARCH_FLAG=""
+          if [ "$(uname -m)" = "aarch64" ]; then
+            ARCH_FLAG="-DENABLE_SVE2=OFF"
+          fi
+
+          cmake -S x265_${X265_VERSION}/source -B x265-build \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/x265 \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DENABLE_SHARED=OFF \
+            -DENABLE_CLI=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            $ARCH_FLAG
+          cmake --build x265-build -j$(nproc)
+          cmake --install x265-build
+
+          # Fix pkg-config prefix path
+          sed -i "s|prefix=.*|prefix=$GITHUB_WORKSPACE/deps/x265|" \
+            $GITHUB_WORKSPACE/deps/x265/lib/pkgconfig/x265.pc
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/x265
+          key: ${{ inputs.arch }}-dep-x265-${{ hashFiles('.github/workflows/dep-x265.yml') }}

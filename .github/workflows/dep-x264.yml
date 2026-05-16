@@ -1,0 +1,53 @@
+name: Build x264
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/x264
+          key: ${{ inputs.arch }}-dep-x264-${{ hashFiles('.github/workflows/dep-x264.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential nasm
+
+      - name: Build x264
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          X264_COMMIT: b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+        run: |
+          git clone --branch stable https://code.videolan.org/videolan/x264.git
+          cd x264
+          git checkout $X264_COMMIT
+          ./configure \
+            --prefix=$GITHUB_WORKSPACE/deps/x264 \
+            --enable-static \
+            --disable-shared \
+            --disable-cli \
+            --enable-pic \
+            --enable-strip
+          make -j$(nproc)
+          make install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/x264
+          key: ${{ inputs.arch }}-dep-x264-${{ hashFiles('.github/workflows/dep-x264.yml') }}

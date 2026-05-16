@@ -1,0 +1,53 @@
+name: Build libsoxr
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libsoxr
+          key: ${{ inputs.arch }}-dep-libsoxr-${{ hashFiles('.github/workflows/dep-libsoxr.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake xz-utils
+
+      - name: Build libsoxr
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          SOXR_VERSION: "0.1.3"
+        run: |
+          curl -L "https://downloads.sourceforge.net/project/soxr/soxr-$SOXR_VERSION-Source.tar.xz" \
+            -o soxr.tar.xz
+          tar xJf soxr.tar.xz
+          cmake -S soxr-$SOXR_VERSION-Source -B soxr-build \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/libsoxr \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_TESTS=OFF \
+            -DWITH_OPENMP=OFF
+          cmake --build soxr-build -j$(nproc)
+          cmake --install soxr-build
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/libsoxr
+          key: ${{ inputs.arch }}-dep-libsoxr-${{ hashFiles('.github/workflows/dep-libsoxr.yml') }}

@@ -1,0 +1,57 @@
+name: Build OpenSSL
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/openssl
+          key: ${{ inputs.arch }}-dep-openssl-${{ hashFiles('.github/workflows/dep-openssl.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Build OpenSSL
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          OPENSSL_TAG: openssl-3.4.0
+        run: |
+          git clone --depth 1 --branch $OPENSSL_TAG \
+            https://github.com/openssl/openssl.git
+          cd openssl
+          case "$(uname -m)" in
+            x86_64)  OPENSSL_TARGET=linux-x86_64 ;;
+            aarch64) OPENSSL_TARGET=linux-aarch64 ;;
+            *)       OPENSSL_TARGET=linux-generic64 ;;
+          esac
+          ./Configure $OPENSSL_TARGET \
+            --prefix=$GITHUB_WORKSPACE/deps/openssl \
+            --openssldir=$GITHUB_WORKSPACE/deps/openssl/ssl \
+            --libdir=lib \
+            no-shared no-tests no-zlib no-ssl3 no-ssl3-method \
+            -fPIC
+          make -j$(nproc)
+          make install_sw
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/openssl
+          key: ${{ inputs.arch }}-dep-openssl-${{ hashFiles('.github/workflows/dep-openssl.yml') }}

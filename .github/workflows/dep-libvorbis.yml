@@ -1,0 +1,60 @@
+name: Build libvorbis
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libvorbis
+          key: ${{ inputs.arch }}-dep-libvorbis-${{ hashFiles('.github/workflows/dep-libvorbis.yml', '.github/workflows/dep-libogg.yml') }}
+
+      - name: Restore libogg cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libogg
+          key: ${{ inputs.arch }}-dep-libogg-${{ hashFiles('.github/workflows/dep-libogg.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake libtool
+
+      - name: Build libvorbis
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          VORBIS_TAG: v1.3.7
+        run: |
+          git clone --depth 1 --branch $VORBIS_TAG \
+            https://github.com/xiph/vorbis.git
+          cd vorbis
+          ./autogen.sh
+          PKG_CONFIG_PATH=$GITHUB_WORKSPACE/deps/libogg/lib/pkgconfig \
+          ./configure \
+            --prefix=$GITHUB_WORKSPACE/deps/libvorbis \
+            --enable-static \
+            --disable-shared \
+            CFLAGS="-fPIC"
+          make -j$(nproc)
+          make install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/libvorbis
+          key: ${{ inputs.arch }}-dep-libvorbis-${{ hashFiles('.github/workflows/dep-libvorbis.yml', '.github/workflows/dep-libogg.yml') }}

@@ -1,0 +1,52 @@
+name: Build fribidi
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/fribidi
+          key: ${{ inputs.arch }}-dep-fribidi-${{ hashFiles('.github/workflows/dep-fribidi.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential meson ninja-build
+
+      - name: Build fribidi
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          FRIBIDI_TAG: v1.0.15
+        run: |
+          git clone --depth 1 --branch $FRIBIDI_TAG \
+            https://github.com/fribidi/fribidi.git
+          meson setup fribidi-build fribidi \
+            --prefix=$GITHUB_WORKSPACE/deps/fribidi \
+            --default-library=static \
+            --buildtype=release \
+            -Db_staticpic=true \
+            -Ddocs=false \
+            -Dtests=false
+          ninja -C fribidi-build
+          ninja -C fribidi-build install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/fribidi
+          key: ${{ inputs.arch }}-dep-fribidi-${{ hashFiles('.github/workflows/dep-fribidi.yml') }}

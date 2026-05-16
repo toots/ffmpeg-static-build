@@ -1,0 +1,53 @@
+name: Build libfreetype
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libfreetype
+          key: ${{ inputs.arch }}-dep-libfreetype-${{ hashFiles('.github/workflows/dep-libfreetype.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake
+
+      - name: Build libfreetype
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          FREETYPE_TAG: VER-2-13-3
+        run: |
+          git clone --depth 1 --branch $FREETYPE_TAG \
+            https://gitlab.freedesktop.org/freetype/freetype.git
+          cmake -S freetype -B freetype-build \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/libfreetype \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DFT_DISABLE_HARFBUZZ=ON \
+            -DFT_DISABLE_PNG=ON \
+            -DFT_DISABLE_BROTLI=ON
+          cmake --build freetype-build -j$(nproc)
+          cmake --install freetype-build
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/libfreetype
+          key: ${{ inputs.arch }}-dep-libfreetype-${{ hashFiles('.github/workflows/dep-libfreetype.yml') }}

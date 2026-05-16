@@ -1,0 +1,66 @@
+name: Build harfbuzz
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/harfbuzz
+          key: ${{ inputs.arch }}-dep-harfbuzz-${{ hashFiles('.github/workflows/dep-harfbuzz.yml', '.github/workflows/dep-libfreetype.yml') }}
+
+      - name: Restore libfreetype cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libfreetype
+          key: ${{ inputs.arch }}-dep-libfreetype-${{ hashFiles('.github/workflows/dep-libfreetype.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential meson ninja-build pkg-config
+
+      - name: Build harfbuzz
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          HARFBUZZ_TAG: 10.1.0
+        run: |
+          git clone --depth 1 --branch $HARFBUZZ_TAG \
+            https://github.com/harfbuzz/harfbuzz.git
+          PKG_CONFIG_PATH=$(find $GITHUB_WORKSPACE/deps/libfreetype -name pkgconfig -type d | tr '\n' ':') \
+          meson setup hb-build harfbuzz \
+            --prefix=$GITHUB_WORKSPACE/deps/harfbuzz \
+            --default-library=static \
+            --buildtype=release \
+            -Db_staticpic=true \
+            -Dtests=disabled \
+            -Ddocs=disabled \
+            -Dbenchmark=disabled \
+            -Dfreetype=enabled \
+            -Dglib=disabled \
+            -Dgobject=disabled \
+            -Dicu=disabled \
+            -Dgraphite=disabled
+          ninja -C hb-build
+          ninja -C hb-build install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/harfbuzz
+          key: ${{ inputs.arch }}-dep-harfbuzz-${{ hashFiles('.github/workflows/dep-harfbuzz.yml', '.github/workflows/dep-libfreetype.yml') }}

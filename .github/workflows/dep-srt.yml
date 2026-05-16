@@ -1,0 +1,62 @@
+name: Build SRT
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/srt
+          key: ${{ inputs.arch }}-dep-srt-${{ hashFiles('.github/workflows/dep-srt.yml', '.github/workflows/dep-openssl.yml') }}
+
+      - name: Restore OpenSSL cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/openssl
+          key: ${{ inputs.arch }}-dep-openssl-${{ hashFiles('.github/workflows/dep-openssl.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake
+
+      - name: Build SRT
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          SRT_TAG: v1.5.3
+        run: |
+          git clone --depth 1 --branch $SRT_TAG \
+            https://github.com/Haivision/srt.git
+          cmake -S srt -B srt-build \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/srt \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DENABLE_STATIC=ON \
+            -DENABLE_SHARED=OFF \
+            -DUSE_OPENSSL=ON \
+            -DWITH_OPENSSL_INCLUDEDIR=$GITHUB_WORKSPACE/deps/openssl/include \
+            -DWITH_OPENSSL_LIBDIR=$GITHUB_WORKSPACE/deps/openssl/lib \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+          cmake --build srt-build -j$(nproc)
+          cmake --install srt-build
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/srt
+          key: ${{ inputs.arch }}-dep-srt-${{ hashFiles('.github/workflows/dep-srt.yml', '.github/workflows/dep-openssl.yml') }}

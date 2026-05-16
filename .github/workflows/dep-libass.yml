@@ -1,0 +1,76 @@
+name: Build libass
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libass
+          key: ${{ inputs.arch }}-dep-libass-${{ hashFiles('.github/workflows/dep-libass.yml', '.github/workflows/dep-libfreetype.yml', '.github/workflows/dep-fribidi.yml', '.github/workflows/dep-harfbuzz.yml') }}
+
+      - name: Restore libfreetype cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libfreetype
+          key: ${{ inputs.arch }}-dep-libfreetype-${{ hashFiles('.github/workflows/dep-libfreetype.yml') }}
+
+      - name: Restore fribidi cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/fribidi
+          key: ${{ inputs.arch }}-dep-fribidi-${{ hashFiles('.github/workflows/dep-fribidi.yml') }}
+
+      - name: Restore harfbuzz cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/harfbuzz
+          key: ${{ inputs.arch }}-dep-harfbuzz-${{ hashFiles('.github/workflows/dep-harfbuzz.yml', '.github/workflows/dep-libfreetype.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential autoconf automake libtool pkg-config
+
+      - name: Build libass
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          LIBASS_TAG: 0.17.3
+        run: |
+          git clone --depth 1 --branch $LIBASS_TAG \
+            https://github.com/libass/libass.git
+          cd libass
+          ./autogen.sh
+          PKG_CONFIG_PATH=$(find $GITHUB_WORKSPACE/deps/libfreetype $GITHUB_WORKSPACE/deps/fribidi $GITHUB_WORKSPACE/deps/harfbuzz -name pkgconfig -type d | tr '\n' ':') \
+          ./configure \
+            --prefix=$GITHUB_WORKSPACE/deps/libass \
+            --enable-static \
+            --disable-shared \
+            --disable-fontconfig \
+            --disable-require-system-font-provider \
+            CFLAGS="-fPIC"
+          make -j$(nproc)
+          make install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/libass
+          key: ${{ inputs.arch }}-dep-libass-${{ hashFiles('.github/workflows/dep-libass.yml', '.github/workflows/dep-libfreetype.yml', '.github/workflows/dep-fribidi.yml', '.github/workflows/dep-harfbuzz.yml') }}

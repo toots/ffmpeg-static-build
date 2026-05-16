@@ -1,0 +1,55 @@
+name: Build lame
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/lame
+          key: ${{ inputs.arch }}-dep-lame-${{ hashFiles('.github/workflows/dep-lame.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Build lame
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          LAME_VERSION: "3.100"
+        run: |
+          curl -L "https://sourceforge.net/projects/lame/files/lame/$LAME_VERSION/lame-$LAME_VERSION.tar.gz/download" \
+            -o lame.tar.gz
+          tar xzf lame.tar.gz
+          cd lame-$LAME_VERSION
+          ./configure \
+            --prefix=$GITHUB_WORKSPACE/deps/lame \
+            --enable-static \
+            --disable-shared \
+            --disable-frontend \
+            --disable-decoder \
+            --enable-nasm \
+            CFLAGS="-fPIC"
+          make -j$(nproc)
+          make install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/lame
+          key: ${{ inputs.arch }}-dep-lame-${{ hashFiles('.github/workflows/dep-lame.yml') }}

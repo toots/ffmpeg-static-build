@@ -1,0 +1,63 @@
+name: Build libflac
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libflac
+          key: ${{ inputs.arch }}-dep-libflac-${{ hashFiles('.github/workflows/dep-libflac.yml', '.github/workflows/dep-libogg.yml') }}
+
+      - name: Restore libogg cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/libogg
+          key: ${{ inputs.arch }}-dep-libogg-${{ hashFiles('.github/workflows/dep-libogg.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake nasm
+
+      - name: Build libflac
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          FLAC_TAG: 1.5.0
+        run: |
+          git clone --depth 1 --branch $FLAC_TAG \
+            https://github.com/xiph/flac.git
+          cmake -S flac -B flac-build \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/libflac \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_TESTING=OFF \
+            -DBUILD_DOCS=OFF \
+            -DINSTALL_MANPAGES=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOGG_INCLUDE_DIR=$GITHUB_WORKSPACE/deps/libogg/include \
+            -DOGG_LIBRARY=$GITHUB_WORKSPACE/deps/libogg/lib/libogg.a
+          cmake --build flac-build -j$(nproc)
+          cmake --install flac-build
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/libflac
+          key: ${{ inputs.arch }}-dep-libflac-${{ hashFiles('.github/workflows/dep-libflac.yml', '.github/workflows/dep-libogg.yml') }}

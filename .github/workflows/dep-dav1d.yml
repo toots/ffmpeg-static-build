@@ -1,0 +1,50 @@
+name: Build dav1d
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/dav1d
+          key: ${{ inputs.arch }}-dep-dav1d-${{ hashFiles('.github/workflows/dep-dav1d.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential meson ninja-build nasm
+
+      - name: Build dav1d
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          DAV1D_TAG: 1.5.0
+        run: |
+          git clone --depth 1 --branch $DAV1D_TAG \
+            https://code.videolan.org/videolan/dav1d.git
+          meson setup dav1d-build dav1d \
+            --prefix=$GITHUB_WORKSPACE/deps/dav1d \
+            --default-library=static \
+            --buildtype=release \
+            -Db_staticpic=true
+          ninja -C dav1d-build
+          ninja -C dav1d-build install
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/dav1d
+          key: ${{ inputs.arch }}-dep-dav1d-${{ hashFiles('.github/workflows/dep-dav1d.yml') }}

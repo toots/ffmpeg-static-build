@@ -1,0 +1,54 @@
+name: Build SVT-AV1
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps/svtav1
+          key: ${{ inputs.arch }}-dep-svtav1-${{ hashFiles('.github/workflows/dep-svtav1.yml') }}
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake nasm
+
+      - name: Build SVT-AV1
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          SVTAV1_TAG: v2.3.0
+        run: |
+          git clone --depth 1 --branch $SVTAV1_TAG \
+            https://gitlab.com/AOMediaCodec/SVT-AV1.git
+          cmake -S SVT-AV1 -B svtav1-build \
+            -DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/deps/svtav1 \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_APPS=OFF \
+            -DBUILD_TESTING=OFF \
+            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
+          cmake --build svtav1-build -j$(nproc)
+          cmake --install svtav1-build
+
+      - name: Save cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/svtav1
+          key: ${{ inputs.arch }}-dep-svtav1-${{ hashFiles('.github/workflows/dep-svtav1.yml') }}
