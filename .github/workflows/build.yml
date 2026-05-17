@@ -12,6 +12,7 @@ concurrency:
 env:
   FFMPEG_TAG: n8.1
   PKG_NAME: ffmpeg-liquidsoap
+  TOOLS_PKG_NAME: ffmpeg-liquidsoap-tools
   INSTALL_PREFIX: /usr/local
 
 jobs:
@@ -476,9 +477,7 @@ jobs:
             --disable-manpages \
             --disable-podpages \
             --disable-txtpages \
-            --disable-ffmpeg \
             --disable-ffplay \
-            --disable-ffprobe \
             --enable-gpl \
             --enable-nonfree \
             --enable-openssl \
@@ -559,12 +558,34 @@ jobs:
             fi
           done
 
-      - name: Create Debian package
+      - name: Create Debian packages
         run: |
           VERSION=${{ env.FFMPEG_TAG }}
           VERSION=${VERSION#n}
           STAGING=$GITHUB_WORKSPACE/staging
+          BIN=$STAGING${{ env.INSTALL_PREFIX }}/bin
 
+          # tools package: ffmpeg + ffprobe binaries
+          TOOLS_STAGING=$GITHUB_WORKSPACE/staging-tools
+          mkdir -p "$TOOLS_STAGING${{ env.INSTALL_PREFIX }}/bin"
+          mkdir -p "$TOOLS_STAGING/DEBIAN"
+          cp "$BIN/ffmpeg" "$BIN/ffprobe" "$TOOLS_STAGING${{ env.INSTALL_PREFIX }}/bin/"
+          cat > "$TOOLS_STAGING/DEBIAN/control" <<EOF
+          Package: ${{ env.TOOLS_PKG_NAME }}
+          Version: ${VERSION}
+          Architecture: ${{ matrix.arch }}
+          Maintainer: Liquidsoap <dev@liquidsoap.info>
+          Description: Static FFmpeg and FFprobe CLI tools for Liquidsoap
+           Statically linked ffmpeg and ffprobe binaries with full codec support
+           (aac/fdk-aac, mp3/lame, opus, vorbis, h264/x264, h265/x265,
+           vp8/vp9/libvpx, av1/SVT-AV1/dav1d, srt). Built from the same
+           sources as the ffmpeg-liquidsoap library package.
+          EOF
+          dpkg-deb --build --root-owner-group "$TOOLS_STAGING" \
+            "$GITHUB_WORKSPACE/${{ env.TOOLS_PKG_NAME }}_${VERSION}_${{ matrix.arch }}.deb"
+
+          # libs package: remove bin/ then package the rest
+          rm -rf "$BIN"
           mkdir -p "$STAGING/DEBIAN"
           cat > "$STAGING/DEBIAN/control" <<EOF
           Package: ${{ env.PKG_NAME }}
@@ -580,7 +601,6 @@ jobs:
            with TLS. All external dependencies are built from source and
            bundled as static archives.
           EOF
-
           dpkg-deb --build --root-owner-group "$STAGING" \
             "$GITHUB_WORKSPACE/${{ env.PKG_NAME }}_${VERSION}_${{ matrix.arch }}.deb"
 
@@ -611,7 +631,7 @@ jobs:
         with:
           name: ${{ env.PKG_NAME }}-${{ matrix.arch }}
 
-      - name: Install build tools and package
+      - name: Install build tools and packages
         run: |
           apt-get update
           apt-get install -y build-essential libbz2-dev pkg-config ./*.deb
@@ -627,6 +647,11 @@ jobs:
       - name: Run test program
         run: ./hello_ffmpeg
 
+      - name: Test ffmpeg and ffprobe binaries
+        run: |
+          ffmpeg -version
+          ffprobe -version
+
   publish:
     runs-on: ubuntu-24.04
     needs: [build, test]
@@ -639,13 +664,13 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
-      - name: Download amd64 package
+      - name: Download amd64 packages
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.PKG_NAME }}-amd64
           path: repo/pool/main
 
-      - name: Download arm64 package
+      - name: Download arm64 packages
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.PKG_NAME }}-arm64
@@ -702,6 +727,8 @@ jobs:
           echo "deb ${REPO_URL} stable main" | sudo tee /etc/apt/sources.list.d/liquidsoap-ffmpeg.list
           sudo apt-get update
           sudo apt-get install ${{ env.PKG_NAME }}
+          # Optional: static ffmpeg and ffprobe CLI tools
+          sudo apt-get install ${{ env.TOOLS_PKG_NAME }}
           </pre>
           </body></html>
           EOF

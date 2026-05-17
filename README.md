@@ -4,10 +4,17 @@ A comprehensive static FFmpeg build packaged as a Debian package, published via 
 
 ## Package contents
 
+### `ffmpeg-liquidsoap`
+
 - `/usr/local/lib/libav*.a` — static libraries (libavcodec, libavformat, libavutil, libswresample, libswscale, libavfilter)
 - `/usr/local/lib/*.a` — all external dependency static archives (bundled, no `-dev` packages needed to link)
 - `/usr/local/include/` — headers
 - `/usr/local/lib/pkgconfig/` — pkg-config files
+
+### `ffmpeg-liquidsoap-tools`
+
+- `/usr/local/bin/ffmpeg` — static FFmpeg CLI binary
+- `/usr/local/bin/ffprobe` — static FFprobe CLI binary
 
 ## Supported formats and codecs
 
