@@ -546,7 +546,11 @@ jobs:
               "$pc"
           done
 
-          for lib in libz libbz2; do
+          # Bundle libz.a (compiled with -fPIC on Ubuntu runners).
+          # libbz2.a is intentionally excluded: the system version is not
+          # compiled with -fPIC and cannot be linked into a shared object.
+          # Downstream users should rely on the system's libbz2 (-lbz2).
+          for lib in libz; do
             src=$(find /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/lib -maxdepth 1 -name "${lib}.a" 2>/dev/null | head -1)
             if [ -n "$src" ]; then
               cp "$src" "$LIB/"
@@ -567,6 +571,7 @@ jobs:
           Version: ${VERSION}
           Architecture: ${{ matrix.arch }}
           Maintainer: Liquidsoap <dev@liquidsoap.info>
+          Depends: libbz2-dev
           Description: FFmpeg static build for Liquidsoap
            Static libav* libraries with all built-in codecs and containers,
            plus aac (fdk-aac), mp3 (lame), opus, vorbis, h264 (x264), h265
@@ -609,7 +614,7 @@ jobs:
       - name: Install build tools and package
         run: |
           apt-get update
-          apt-get install -y build-essential pkg-config ./*.deb
+          apt-get install -y build-essential libbz2-dev pkg-config ./*.deb
 
       - name: Build test program
         run: |
