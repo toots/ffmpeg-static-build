@@ -1,6 +1,6 @@
 # ffmpeg-liquidsoap
 
-A comprehensive static FFmpeg build packaged as a Debian package, published via GitHub Pages as an apt repository. **Libraries only** — no CLI binaries.
+A comprehensive static FFmpeg build published via GitHub Pages as an apt repository. Two packages are provided: static libraries for linking, and CLI tools.
 
 ## Package contents
 
@@ -76,7 +76,12 @@ echo "deb https://liquidsoap.info/ffmpeg-static-build stable main" \
   | sudo tee /etc/apt/sources.list.d/liquidsoap-ffmpeg.list
 
 sudo apt-get update
+
+# Static libraries and headers (for linking):
 sudo apt-get install ffmpeg-liquidsoap
+
+# Static ffmpeg and ffprobe CLI tools (optional):
+sudo apt-get install ffmpeg-liquidsoap-tools
 ```
 
 ## Linking against the static libraries
@@ -118,7 +123,7 @@ Ensure these are available for your organisation/repository.
 
 ### Build caching
 
-Each of the 18 external dependencies has its own cache keyed on its version,
+Each of the 19 external dependencies has its own cache keyed on its version,
 so bumping one library triggers only that library's rebuild — all others are
 restored from cache. The FFmpeg staging install has a separate cache keyed on
 all dependency versions combined.
